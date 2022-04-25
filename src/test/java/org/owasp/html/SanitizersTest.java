@@ -222,6 +222,37 @@ public class SanitizersTest extends TestCase {
     assertEquals(want, s.sanitize(input));
   }
 
+  // note: currently fails due to escaping in org.owasp.html.HtmlStreamRenderer.writeOpenTag
+  @Test
+  public static final void testTelUriRfc3966WithAllowUrlProtocol(){
+    PolicyFactory s = new HtmlPolicyBuilder()
+            .allowElements("a")
+            .allowAttributes("href").onElements("a")
+            .allowStandardUrlProtocols()
+            .allowUrlProtocols("tel")
+            .toFactory();
+    String input = (
+            "<a href=\"tel:1234567890\">A local phone number</a>"
+                    + "<a href=\"tel:1-234-567\">A number with dashes</a>"
+                    + "<a href=\"tel:1.234.567\">A number with dots</a>"
+                    + "<a href=\"tel:023 456 78 90\">Spaces need not be escaped but can</a>"
+                    + "<a href=\"tel:(555)1234\">Brackets need not be escaped but can</a>"
+                    + "<a href=\"tel:+1234567890\">The leading plus is a separator and MUST NOT be escaped</a>"
+                    + "<a href=\"tel:tel:890;phone-context=+123-4-567\">The equals is a separator and MUST NOT be escaped but the plus in the parameter is not a separator and MUST be escaped</a>"
+    );
+    String want = (
+            "<a href=\"tel:1234567890\">A local phone number</a>"
+                    + "<a href=\"tel:1-234-567\">A number with dashes</a>"
+                    + "<a href=\"tel:1.234.567\">A number with dots</a>"
+                    + "<a href=\"tel:023%20456%2078%2090\">Spaces need not be escaped but can</a>"
+                    + "<a href=\"tel:%28555%291234\">Brackets need not be escaped but can</a>"
+                    // fails, see https://datatracker.ietf.org/doc/html/rfc3966#section-3
+                    + "<a href=\"tel:+1234567890\">The leading plus is a separator and MUST NOT be escaped</a>"
+                    // fails, see https://datatracker.ietf.org/doc/html/rfc3966#section-3
+                    + "<a href=\"tel:tel:890;phone-context=;&#43;123-4-567\">The equals is a separator and MUST NOT be escaped but the plus in the parameter is not a separator and MUST be escaped</a>");
+    assertEquals(want, s.sanitize(input));
+  }
+
   @Test
   public static final void testIssue9StylesInTables() {
     String input = ""
@@ -500,7 +531,7 @@ public class SanitizersTest extends TestCase {
     String want = "<h1 style=\"color:green\">This is some green text</h1>";
     assertEquals(want, policyBuilder.sanitize(input));
   }
-  
+
   static int fac(int n) {
     int ifac = 1;
     for (int i = 1; i <= n; ++i) {
